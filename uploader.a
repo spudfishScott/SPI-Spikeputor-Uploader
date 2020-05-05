@@ -30,7 +30,7 @@ SPICmd		ldx #$00
         	sta SPI_SS		; begin SPI transaction
                 lda #$01
                 jsr A2_WAIT		; wait for INIT puse to finish (30 uS)
-.nextbyte	lda ZP_CMD_PKG,x	; load byte (one command byte, two data bytes)
+.nextByte	lda ZP_CMD_PKG,x	; load byte (one command byte, two data bytes)
                 sta SPI_DATA		; store in SPI data latch
                 sta SPI_EXEC		; execute SPI transfer
 .wait		lda SPI_SS		; get transfer status
@@ -39,7 +39,7 @@ SPICmd		ldx #$00
                 sta ZP_CMD_PKG,x	; store byte (one status byte, two data bytes)
                 inx
                 cpx #$03
-                bne .nextbyte		; repeat for all three bytes
+                bne .nextByte		; repeat for all three bytes
                 sta SPI_RESET		; end SPI transaction
                 rts
 
