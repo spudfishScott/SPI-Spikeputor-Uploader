@@ -4,21 +4,25 @@
         
 		org $9400
         
-SPI_SS		equ $C0C1
+SPI_SS		equ $C0C1		; SPI card commands (assumes slot 4)
 SPI_EXEC	equ $C0C0
 SPI_DATA	equ $C0C2
 SPI_RESET	equ $C0C3
 
-A2_WAIT		equ $FCA8
+A2_WAIT		equ $FCA8		; Apple Monitor ROM WAIT function
 
-ZP_CMD_STAT	equ $EB
+ZP_CMD_STAT	equ $EB			; registers for cpi_smd
 ZP_DATAH	equ $EC
 ZP_DATAL	equ $ED
-ZP_LENH		equ $EE
+
+ZP_LENH		equ $EE			; registers for upload_verify
 ZP_LENL		equ $EF
-ZP_VERIFY	equ $FF ; set to $80 to verify, $00 to write
+ZP_VERIFY	equ $FF 		; set to $80 to verify, $00 to write
 ZP_SRC_PTR	equ $F9
 
+;----------------------------------------------------------------------------------------
+; Execute SPI command. Writes command and two data bytes. Reads status and two data bytes
+;----------------------------------------------------------------------------------------
 
 spi_cmd		ldx #$00
         	lda #$01
@@ -38,56 +42,62 @@ xfer_wait	lda SPI_SS
                 sta SPI_RESET
                 rts
 
-upload		lda #$00
+;----------------------------------------------------------------------------------------
+; upload and verify - furnish length and verify flag. Returns with $FF in verify if error
+;----------------------------------------------------------------------------------------
+
+upload_verify	lda #$00		; initialize pointers and page end
 		sta page_end+1
                 lda #$00
                 sta ZP_SRC_PTR
                 lda #$20
                 sta ZP_SRC_PTR+1
                 
-                lda ZP_LENH
+                lda ZP_LENH		; if less than one page, go right to final page
                 beq final_page
 page_ctr	ldy #$00
-page_loop	lda ZP_VERIFY
-                bpl verify
+page_loop	lda ZP_VERIFY		; if verify set, verify, otherwise send
+                bmi verify
                 
-send		lda (ZP_SRC_PTR),y
-		sta ZP_DATAH
+send		lda (ZP_SRC_PTR),y	; data starts at $2000
+		sta ZP_DATAH		; move it into spi data registers
 		iny 
                 lda (ZP_SRC_PTR),y
 		sta ZP_DATAL
-                lda #$90
-                sta ZP_CMD_STAT
+                lda #$90		; $90 = write command
+                sta ZP_CMD_STAT		
                 jsr spi_cmd
                 lda #$01
-                jsr A2_WAIT
+                jsr A2_WAIT		; wait for command to finish (60 µs)
                 jmp common
 
-verify		lda #$80
+verify		lda #$80		; $80 = read command
 		jsr spi_cmd
-                lda (ZP_SRC_PTR),y
-                cmp ZP_DATAH
-                bne error
+                lda (ZP_SRC_PTR),y	
+                cmp ZP_DATAH		; compare data to what was read
+                bne error		; error if not the same
                 iny
                 lda (ZP_SRC_PTR),y
                 cmp ZP_DATAL
                 bne error
                 
 common          iny      
-page_end	cpy #$00
-		bne page_loop
+page_end	cpy #$00		; check to see if done with page
+		bne page_loop		; (including partial page)
 		lda ZP_LENH
                 beq final_page
-                inc ZP_SRC_PTR+1
+                inc ZP_SRC_PTR+1	; add one to data pointer hi byte
                 dec ZP_LENH
-                jmp page_ctr
-final_page	lda ZP_LENL
+                jmp page_ctr		; read or verify next page
+                
+final_page	lda ZP_LENL		; if length lo byte is >0, put it in page_end compare
 		beq end
                 sta page_end+1
                 lda #$00
-                sta ZP_LENL
-                jmp page_ctr
-error		lda #$ff
+                sta ZP_LENL		; and zero out lo byte
+                jmp page_ctr		; and read or verify next (partial) page
+                
+error		lda #$ff		; set error flag
 		sta ZP_VERIFY
 end		rts
 	
