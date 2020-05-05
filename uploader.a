@@ -1,0 +1,44 @@
+
+		processor 6502
+		seg program
+        
+.start       	org $0803
+        	jmp .start
+        
+		org $9400
+        
+SPI_SS		equ $C0C1
+SPI_EXEC	equ $C0C0
+SPI_DATA	equ $C0C2
+SPI_RESET	equ $C0C3
+
+A2_WAIT		equ $FCA8
+
+ZP_CMD_STAT	equ $06
+ZP_DATAH	equ $07
+ZP_DATAL	equ $08
+
+spi_cmd		ldx #$00
+        	lda #$01
+        	sta SPI_SS
+                lda #$01
+                jsr A2_WAIT
+spi_send_recv   lda ZP_CMD_STAT,x
+                sta SPI_DATA
+                sta SPI_EXEC
+xfer_wait	lda SPI_SS
+                bpl xfer_wait
+                lda SPI_DATA
+                sta ZP_CMD_STAT,x
+                inx
+                cpx #$03
+                bne spi_send_recv
+                sta SPI_RESET
+                rts
+
+                
+        
+        
+        
+
+
