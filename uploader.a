@@ -2,9 +2,6 @@
 		processor 6502
 		seg program
         
-.start       	org $0803
-        	jmp .start
-        
 		org $9400
         
 SPI_SS		equ $C0C1
@@ -14,9 +11,14 @@ SPI_RESET	equ $C0C3
 
 A2_WAIT		equ $FCA8
 
-ZP_CMD_STAT	equ $06
-ZP_DATAH	equ $07
-ZP_DATAL	equ $08
+ZP_CMD_STAT	equ $EB
+ZP_DATAH	equ $EC
+ZP_DATAL	equ $ED
+ZP_LENH		equ $EE
+ZP_LENL		equ $EF
+ZP_VERIFY	equ $FF ; set to $80 to verify, $00 to write
+ZP_SRC_PTR	equ $F9
+
 
 spi_cmd		ldx #$00
         	lda #$01
@@ -36,6 +38,59 @@ xfer_wait	lda SPI_SS
                 sta SPI_RESET
                 rts
 
+upload		lda #$00
+		sta page_end+1
+                lda #$00
+                sta ZP_SRC_PTR
+                lda #$20
+                sta ZP_SRC_PTR+1
+                
+                lda ZP_LENH
+                beq final_page
+page_ctr	ldy #$00
+page_loop	lda ZP_VERIFY
+                bpl verify
+                
+send		lda (ZP_SRC_PTR),y
+		sta ZP_DATAH
+		iny 
+                lda (ZP_SRC_PTR),y
+		sta ZP_DATAL
+                lda #$90
+                sta ZP_CMD_STAT
+                jsr spi_cmd
+                lda #$01
+                jsr A2_WAIT
+                jmp common
+
+verify		lda #$80
+		jsr spi_cmd
+                lda (ZP_SRC_PTR),y
+                cmp ZP_DATAH
+                bne error
+                iny
+                lda (ZP_SRC_PTR),y
+                cmp ZP_DATAL
+                bne error
+                
+common          iny      
+page_end	cpy #$00
+		bne page_loop
+		lda ZP_LENH
+                beq final_page
+                inc ZP_SRC_PTR+1
+                dec ZP_LENH
+                jmp page_ctr
+final_page	lda ZP_LENL
+		beq end
+                sta page_end+1
+                lda #$00
+                sta ZP_LENL
+                jmp page_ctr
+error		lda #$ff
+		sta ZP_VERIFY
+end		rts
+	
                 
         
         
