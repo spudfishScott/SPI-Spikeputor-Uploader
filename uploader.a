@@ -48,7 +48,7 @@ xfer_wait	lda SPI_SS
 
 upload_verify	lda #$00		; initialize pointers and page end
 		sta page_end+1
-                lda #$00
+                lda #$04
                 sta ZP_SRC_PTR
                 lda #$20
                 sta ZP_SRC_PTR+1
