@@ -175,14 +175,32 @@ Monitor_IO	jsr StopSpikeputor
                 ldy #ZP_BUF_IDXH
                 jsr WriteAddress	; write new buffer indeces
                 
-                			; check for keyboard interrupt
 .restart	lda #$e0
 		sta ZP_CMD_STAT
                 jsr SPICmd		; restart Spikeputor
-                lda #100
+                
+                lda A2_KBD		; check for keyboard interrupt
+                bpl .wait		; no new key pressed
+                
+                cmp A2_KBD_STRB		; clear keyboard strobe
+                cmp #$9b		; if esc is pressed, end
+                beq .return
+                cmp #$80		; if ctrl-shift-p pressed, reset
+                beq .reset
+                
+.wait           lda #100
                 jsr A2_WAIT		; delay ~26ms - about the time for Spikeputor to write a character to the buffer
                 jmp Monitor_IO          ; loop
             	
+.reset		lda #$c0
+		sta ZP_CMD_STAT
+                jsr SPICmd		; reset Spikeputor
+                lda #$ff
+                jsr A2_WAIT		; wait 166 ms for Spikeputor reset
+                jmp Monitor_IO
+                
+.return		rts
+
 ;----------------------------------------------------------------------------------------
 ; WriteAddress - sets the Spikeputor address and writes the word. 
 ;		set X to ADDRH, A to ADDRL, Y to zero page address of word (big endian)
