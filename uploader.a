@@ -11,6 +11,8 @@ SPI_RESET	equ $C0C3
 
 A2_WAIT		equ $FCA8		; Apple Monitor ROM WAIT function
 A2_COUT		equ $FDED		; Apple Monitor ROM Character Out
+A2_KBD		equ $C000		; Apple Keyboard In
+A2_KBD_STRB	equ $C010		; Apple Keyboard Strobe Clear
 
 SP_OUT_BUF_LCK	equ $7FB0		; Spikeputor Output Buffer Lock
 SP_OUT_BUF_IDX	equ $7FB2		; Spikeputor Output Buffer Indeces
@@ -59,6 +61,10 @@ SPICmd		ldx #$00
                 sta SPI_RESET		; end SPI transaction
                 lda #$01
                 jsr A2_WAIT		; wait 30 µs to give time for SPI EXECUTE pulse to finish
+                nop			; wait an additional 8 µs to be sure that 60 elapses between 
+                nop			; SPI end trasaction and SPI begin
+                nop
+                nop
                 rts
                 
 ;----------------------------------------------------------------------------------------
@@ -151,8 +157,11 @@ Monitor_IO	jsr StopSpikeputor
                 lda ZP_DATAL		; get lo byte of character data (ascii)
                                         ; TODO: check for special characters
                                         ; TODO: handle input and graphics
-                                        ; TODO: convert lower case to upper case
-                jsr A2_COUT		; print the character
+                ora #$80		; make sure text is normal (not flashing or inverse)
+                cmp #$E0                ; if character is >= $E0, it's lower case
+                bmi .print
+                and #$DF		; get rid of bit 5 (converts to upper case)
+.print          jsr A2_COUT		; print the character
                 lda ZP_BUF_IDXH
                 clc
                 adc #$02		; go to next index
@@ -170,8 +179,8 @@ Monitor_IO	jsr StopSpikeputor
 .restart	lda #$e0
 		sta ZP_CMD_STAT
                 jsr SPICmd		; restart Spikeputor
-                lda #97
-                jsr A2_WAIT		; delay ~25ms - about the time for Spikeputor to write a character to the buffer
+                lda #100
+                jsr A2_WAIT		; delay ~26ms - about the time for Spikeputor to write a character to the buffer
                 jmp Monitor_IO          ; loop
             	
 ;----------------------------------------------------------------------------------------
