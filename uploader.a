@@ -185,7 +185,6 @@ Monitor_IO	jsr StopSpikeputor
                 beq .return
                 cmp #$80		; if ctrl-shift-p pressed, reset
                 beq .reset
-                
 
 .wait	      	lda #$60
                 jsr A2_WAIT		; delay ~25 ms, enough for Spikeputor to add to buffer
@@ -194,6 +193,8 @@ Monitor_IO	jsr StopSpikeputor
 .reset		lda #$c0
 		sta ZP_CMD_STAT
                 jsr SPICmd		; reset Spikeputor
+                lda #$e0
+                jsr A2_WAIT		; allow Spikeputor to reset
                 jmp Monitor_IO
                 
 .return		rts
