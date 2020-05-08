@@ -59,7 +59,7 @@ SPICmd		ldx #$00
                 cpx #$03
                 bne .nextByte		; repeat for all three bytes
                 sta SPI_RESET		; end SPI transaction
-                lda #$01
+                lda #$01		; seems to work a little better
                 jsr A2_WAIT		; wait 30 µs to give time for SPI EXECUTE pulse to finish
                 nop			; wait an additional 8 µs to be sure that 60 elapses between 
                 nop			; SPI end trasaction and SPI begin
@@ -188,8 +188,8 @@ Monitor_IO	jsr StopSpikeputor
                 cmp #$80		; if ctrl-shift-p pressed, reset
                 beq .reset
                 
-.wait           lda #100
-                jsr A2_WAIT		; delay ~26ms - about the time for Spikeputor to write a character to the buffer
+.wait           lda #$e0
+                jsr A2_WAIT		; delay to let Spikeputor operate a bit
                 jmp Monitor_IO          ; loop
             	
 .reset		lda #$c0
