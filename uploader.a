@@ -191,19 +191,16 @@ Monitor_IO	jsr StopSpikeputor
                 cmp #$80		; if ctrl-shift-p pressed, reset
                 beq .reset
                 
-                ; TODO: This should be a much longer delay to keep Spikeputor stable. Not quite sure why yet.
-.wait           lda #$e0
+.wait           ldx #$03		; repeat wait a number of times
+.waitLoop       lda #$ff
                 jsr A2_WAIT		; delay to let Spikeputor operate a bit
+                dex
+                bne .waitLoop
                 jmp Monitor_IO          ; loop
             	
 .reset		lda #$c0
 		sta ZP_CMD_STAT
                 jsr SPICmd		; reset Spikeputor
-                ldx #$03		; repeat wait a number of times
-.waitLoop     	lda #$ff
-                jsr A2_WAIT		; wait 166 ms for Spikeputor reset
-                dex
-                bne .waitLoop
                 jmp Monitor_IO
                 
 .return		rts
