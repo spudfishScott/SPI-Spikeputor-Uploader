@@ -175,12 +175,7 @@ Monitor_IO	jsr StopSpikeputor
                 ldy #ZP_BUF_IDXH
                 jsr WriteAddress	; write new buffer indeces
                 
-.restart	ldx #$ff
-		lda #$ff
-		jsr ReadAddress		; set address bus to $ffff - might help
-		lda #$e0
-		sta ZP_CMD_STAT
-                jsr SPICmd		; restart Spikeputor
+.restart	jsr RestartSpikeputor
                 
                 lda A2_KBD		; check for keyboard interrupt
                 bpl .wait		; no new key pressed
@@ -191,11 +186,9 @@ Monitor_IO	jsr StopSpikeputor
                 cmp #$80		; if ctrl-shift-p pressed, reset
                 beq .reset
                 
-.wait           ldx #$03		; repeat wait a number of times
-.waitLoop       lda #$ff
-                jsr A2_WAIT		; delay to let Spikeputor operate a bit
-                dex
-                bne .waitLoop
+
+.wait	      	lda #$60
+                jsr A2_WAIT		; delay ~25 ms, enough for Spikeputor to add to buffer
                 jmp Monitor_IO          ; loop
             	
 .reset		lda #$c0
@@ -259,4 +252,18 @@ StopSpikeputor 	lda #$F0
                 lda ZP_CMD_STAT
                 bmi .waitForStop	; if bit 7 is set, not yet stopped
 		rts
+                
+;----------------------------------------------------------------------------------------
+; RestartSpikeputor - sends the Spikeputor a restart command after conditioning the Address bus
+;		    - A and X scrambled.
+;----------------------------------------------------------------------------------------
+                SUBROUTINE
+RestartSpikeputor
+		ldx #$ff		; set address bus to $ffff
+		lda #$ff		; this helps make sure 0's don't back up into the PC
+		jsr ReadAddress		; causing the Spikeputor to branch to wrong address
+		lda #$e0
+		sta ZP_CMD_STAT
+                jsr SPICmd		; restart Spikeputor
+                rts
                 
