@@ -188,6 +188,7 @@ Monitor_IO	jsr StopSpikeputor
                 cmp #$80		; if ctrl-shift-p pressed, reset
                 beq .reset
                 
+                ; TODO: This should be a much longer delay to keep Spikeputor stable. Not quite sure why yet.
 .wait           lda #$e0
                 jsr A2_WAIT		; delay to let Spikeputor operate a bit
                 jmp Monitor_IO          ; loop
