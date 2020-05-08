@@ -59,7 +59,7 @@ SPICmd		ldx #$00
                 cpx #$03
                 bne .nextByte		; repeat for all three bytes
                 sta SPI_RESET		; end SPI transaction
-                lda #$01		; seems to work a little better
+                lda #$01
                 jsr A2_WAIT		; wait 30 µs to give time for SPI EXECUTE pulse to finish
                 nop			; wait an additional 8 µs to be sure that 60 elapses between 
                 nop			; SPI end trasaction and SPI begin
@@ -175,7 +175,10 @@ Monitor_IO	jsr StopSpikeputor
                 ldy #ZP_BUF_IDXH
                 jsr WriteAddress	; write new buffer indeces
                 
-.restart	lda #$e0
+.restart	ldx #$ff
+		lda #$ff
+		jsr ReadAddress		; set address bus to $ffff - might help
+		lda #$e0
 		sta ZP_CMD_STAT
                 jsr SPICmd		; restart Spikeputor
                 
@@ -196,8 +199,11 @@ Monitor_IO	jsr StopSpikeputor
 .reset		lda #$c0
 		sta ZP_CMD_STAT
                 jsr SPICmd		; reset Spikeputor
-                lda #$ff
+                ldx #$03		; repeat wait a number of times
+.waitLoop     	lda #$ff
                 jsr A2_WAIT		; wait 166 ms for Spikeputor reset
+                dex
+                bne .waitLoop
                 jmp Monitor_IO
                 
 .return		rts
