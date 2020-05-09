@@ -261,8 +261,8 @@ StopSpikeputor 	lda #$F0
                 SUBROUTINE
 RestartSpikeputor
 		ldx #$ff		; set address bus to $ffff
-		lda #$ff		; this helps make sure 0's don't back up into the PC
-		jsr ReadAddress		; causing the Spikeputor to branch to wrong address
+		lda #$ff		; this helps make sure 0's don't back up into the Spikeputor PC
+		jsr ReadAddress		; causing the Spikeputor to randomly branch to wrong address
 		lda #$e0
 		sta ZP_CMD_STAT
                 jsr SPICmd		; restart Spikeputor
