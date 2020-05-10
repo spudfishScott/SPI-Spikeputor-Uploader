@@ -160,8 +160,8 @@ Monitor_IO     	lda #$00
                 bne .nextChk		; branch too long - fix this with subroutines 
                 jmp .return
 .nextChk        cmp #$80		; if ctrl-shift-p pressed, reset
-		jmp .reset
                 bne .stop
+		jmp .reset
                 
 .stop		jsr StopSpikeputor
                 ldx #>SP_OUT_BUF_LCK
