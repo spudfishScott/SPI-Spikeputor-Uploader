@@ -152,7 +152,18 @@ UploadVerify	lda #$00		; initialize pointers and page end
 Monitor_IO     	lda #$00
                 sta ZP_MON_FLAGS	; initialize monitor flags
                 
-.monitorLoop	jsr StopSpikeputor
+.monitorLoop	lda A2_KBD
+                bpl .stop		; no new input, resume
+                
+                cmp A2_KBD_STRB		; clear keyboard strobe
+                cmp #$91		; if ctrl-q is pressed, end
+                bne .nextChk		; branch too long - fix this with subroutines 
+                jmp .return
+.nextChk        cmp #$80		; if ctrl-shift-p pressed, reset
+		jmp .reset
+                bne .stop
+                
+.stop		jsr StopSpikeputor
                 ldx #>SP_OUT_BUF_LCK
                 lda #<SP_OUT_BUF_LCK
                 jsr ReadAddress		; read output buffer lock
@@ -182,7 +193,9 @@ Monitor_IO     	lda #$00
                 lda (A2_BAS),y		; get current cursor character
                 and #$3f
                 eor #$20
+                clc
                 adc #$a0
+                sta (A2_BAS),y		; store normal version
                 
 .printPrep      lda ZP_DATAL		; get lo byte of character data (ascii)
                                         ; TODO: check for special characters
@@ -201,7 +214,7 @@ Monitor_IO     	lda #$00
                 lda (A2_BAS),y		; get current cursor character
                 and #$3f
                 ora #$40
-                sta (A2_BAS),y
+                sta (A2_BAS),y		; store blink version
                 
 .incIdx         lda ZP_BUF_IDXH
 		clc
@@ -229,11 +242,11 @@ Monitor_IO     	lda #$00
                 lda A2_KBD
                 bpl .restart		; no new input, resume
                 
+                cmp #$91		; ctrl-q is pressed
+                beq .restart
+                cmp #$80		; ctrl-shift-p pressed
+                beq .restart		; if either key pressed, don't clear strobe and fall through to next loop
                 cmp A2_KBD_STRB		; clear keyboard strobe
-                cmp #$91		; if ctrl-q is pressed, end
-                beq .return
-                cmp #$80		; if ctrl-shift-p pressed, reset
-                beq .reset
                 
                 and #$7f		; regular key pressed: strip out strobe bit
                 sta ZP_BUF_OUTCHAR+1	; store the character in lo out byte
@@ -272,15 +285,6 @@ Monitor_IO     	lda #$00
                 jsr WriteAddress	; write new buffer indeces               
                 
 .restart	jsr RestartSpikeputor
-
-		lda A2_KBD
-                bpl .wait		; no new input, resume
-                
-                cmp A2_KBD_STRB		; clear keyboard strobe
-                cmp #$91		; if ctrl-q is pressed, end
-                beq .return
-                cmp #$80		; if ctrl-shift-p pressed, reset
-                beq .reset
                 
 .wait		lda #$60
                 jsr A2_WAIT		; delay ~25 ms, enough for Spikeputor to add to buffer
@@ -308,8 +312,7 @@ WriteAddress	stx ZP_DATAH
                 tax
                 lda $00,x
                 sta ZP_DATAH
-                inx
-                lda $00,x
+                lda $01,x
                 sta ZP_DATAL		; put data into CMD_PKG
                 jsr SPICmd		; write data
                 rts
