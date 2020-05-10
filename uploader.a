@@ -149,19 +149,20 @@ UploadVerify	lda #$00		; initialize pointers and page end
 ;		exit on ESC being pressed, A, X, and Y scrambled
 ;----------------------------------------------------------------------------------------    
         	SUBROUTINE
+.reset		bit A2_KBD_STRB
+		jsr ResetSpikeputor
 Monitor_IO     	lda #$00
                 sta ZP_MON_FLAGS	; initialize monitor flags
                 
 .monitorLoop	lda A2_KBD
-                bpl .stop		; no new input, resume
+                bpl .stop		; no new input, continue
                 
-                cmp A2_KBD_STRB		; clear keyboard strobe
                 cmp #$91		; if ctrl-q is pressed, end
-                bne .nextChk		; branch too long - fix this with subroutines 
-                jmp .return
+                bne .nextChk
+                bit A2_KBD_STRB		; clear keyboard strobe
+                rts
 .nextChk        cmp #$80		; if ctrl-shift-p pressed, reset
-                bne .stop
-		jmp .reset
+                beq .reset
                 
 .stop		jsr StopSpikeputor
                 ldx #>SP_OUT_BUF_LCK
@@ -253,6 +254,9 @@ Monitor_IO     	lda #$00
                 lda #$00
                 sta ZP_BUF_OUTCHAR	; zero in high out byte
                 
+                lda $C030		; click speaker
+                lda $C030
+                
                 ldx #>SP_IN_BUF_IDX
                 lda #<SP_IN_BUF_IDX
                 jsr ReadAddress		; read input buffer indeces
@@ -275,6 +279,7 @@ Monitor_IO     	lda #$00
                 bne .writeInput
                 
                 lda ZP_BUF_IDXH		; increment start index
+                clc
                 adc #$02		; carry can't be set from last add since $7f+$02 is never overflow
                 and #$7f		; wrap index around to $00 after $7f
                 sta ZP_BUF_IDXH
@@ -289,11 +294,7 @@ Monitor_IO     	lda #$00
 .wait		lda #$60
                 jsr A2_WAIT		; delay ~25 ms, enough for Spikeputor to add to buffer
                 jmp .monitorLoop        ; loop
-            	
-.reset		jsr ResetSpikeputor
-                jmp .monitorLoop
                 
-.return		rts
 ;----------------------------------------------------------------------------------------
 ; WriteAddress - sets the Spikeputor address and writes the word. 
 ;		set X to ADDRH, A to ADDRL, Y to zero page address of word (big endian)
