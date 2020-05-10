@@ -2,7 +2,7 @@
 		processor 6502
 		seg program
         
-		org $9400
+		org $9000
         
 SPI_SS		equ $C0C1		; SPI card commands (assumes slot 4)
 SPI_EXEC	equ $C0C0
@@ -47,13 +47,6 @@ ZP_MON_FLAGS	equ $FF			; bit 7: 1 = ESC sequence being read
                                         ; bit 4: 1 = full screen gr, 0 = mixed gr and text
                                         ; bit 3: 1 = show cursor, 0 = hide cursor
                                         ; bit 2: 1 = allow input, 0 = disallow input
-
-;-----------------------------------------------------------------------------------------
-; Command dispatches
-;-----------------------------------------------------------------------------------------
-D_SPICmd	JMP SPICmd
-D_UploadVerify	JMP UploadVerify
-D_Monitor_IO	JMP Monitor_IO
 
 ;-----------------------------------------------------------------------------------------
 ; Execute SPI command. Writes command and two data bytes. Reads status and two data bytes.
@@ -404,3 +397,10 @@ ResetSpikeputor
                 jsr A2_WAIT		; allow Spikeputor to reset
                 rts
                 
+;-----------------------------------------------------------------------------------------
+; Command dispatches
+;-----------------------------------------------------------------------------------------
+		org $9400
+D_SPICmd	JMP SPICmd
+D_UploadVerify	JMP UploadVerify
+D_Monitor_IO	JMP Monitor_IO
