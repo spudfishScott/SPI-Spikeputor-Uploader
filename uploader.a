@@ -24,17 +24,19 @@ SP_IN_BUF_LCK	equ $7FB4		; Spikeputor Input Buffer Lock
 SP_IN_BUF_IDX	equ $7FB6		; Spikeputor Input Buffer Indeces
 SP_IN_BUF	equ $7E80		; Spikeputor Input Buffer
 
-ZP_CMD_PKG	equ $EB			; command and data bytes for spi_cmd
+; command and data bytes for spi_cmd
+ZP_CMD_PKG	equ $EB	
 ZP_CMD_STAT	equ $EB			
 ZP_DATAH	equ $EC
 ZP_DATAL	equ $ED
-					; variables for upload_verify
+
+; variables for upload_verify
 ZP_LENH		equ $EE			; length
 ZP_LENL		equ $EF
 ZP_VERIFY	equ $FF 		; set to $80 to verify, $00 to write
 ZP_SRC_PTR	equ $F9			; pointer to source data - starts at $2004
 
-					; variables for monitor_IO
+; variables for monitor_IO
 ZP_BUF_IDX	equ $EE			; buffer index 
 ZP_BUF_IDXH	equ $EE			; (hi byte = first char index)
 ZP_BUF_IDXL	equ $EF			; (lo byte = next open index)
@@ -147,8 +149,9 @@ UploadVerify	lda #$00		; initialize pointers and page end
 ;		exit on ESC being pressed, A, X, and Y scrambled
 ;----------------------------------------------------------------------------------------    
         	SUBROUTINE
-Monitor_IO     lda #$00
+Monitor_IO     	lda #$00
                 sta ZP_MON_FLAGS	; initialize monitor flags
+                
 .monitorLoop	jsr StopSpikeputor
                 ldx #>SP_OUT_BUF_LCK
                 lda #<SP_OUT_BUF_LCK
@@ -173,7 +176,7 @@ Monitor_IO     lda #$00
                 
                 lda #$08		; check bit 3 (input mode on)
 		bit ZP_MON_FLAGS
-                beq .print		; input mode off
+                beq .printPrep		; input mode off
                 
                 ldy A2_CH		; turn cursor blink character to normal
                 lda (A2_BAS),y		; get current cursor character
@@ -181,14 +184,14 @@ Monitor_IO     lda #$00
                 eor #$20
                 adc #$a0
                 
-.print          lda ZP_DATAL		; get lo byte of character data (ascii)
+.printPrep      lda ZP_DATAL		; get lo byte of character data (ascii)
                                         ; TODO: check for special characters
                                         ; TODO: handle input and graphics
                 ora #$80		; make sure text is normal (not flashing or inverse)
                 cmp #$E0                ; if character is >= $E0, it's lower case
                 bmi .print
                 and #$DF		; get rid of bit 5 (converts to upper case)
-                jsr A2_COUT		; print the character
+.print          jsr A2_COUT		; print the character
                 
                 lda #$08		; check bit 3 (input mode on)
 		bit ZP_MON_FLAGS
@@ -224,7 +227,7 @@ Monitor_IO     lda #$00
                 bne .restart		; if not zero, buffer is locked, resume
                 
                 lda A2_KBD
-                bpl .restart		; no new input, restart Spikeputor
+                bpl .restart		; no new input, resume
                 
                 cmp A2_KBD_STRB		; clear keyboard strobe
                 cmp #$91		; if ctrl-q is pressed, end
@@ -263,13 +266,23 @@ Monitor_IO     lda #$00
                 and #$7f		; wrap index around to $00 after $7f
                 sta ZP_BUF_IDXH
                 
-.writeInput 	ldx #>SP_OUT_BUF_IDX
-                lda #<SP_OUT_BUF_IDX
+.writeInput 	ldx #>SP_IN_BUF_IDX
+                lda #<SP_IN_BUF_IDX
                 ldy #ZP_BUF_IDX
                 jsr WriteAddress	; write new buffer indeces               
                 
 .restart	jsr RestartSpikeputor
-		lda #$60
+
+		lda A2_KBD
+                bpl .wait		; no new input, resume
+                
+                cmp A2_KBD_STRB		; clear keyboard strobe
+                cmp #$91		; if ctrl-q is pressed, end
+                beq .return
+                cmp #$80		; if ctrl-shift-p pressed, reset
+                beq .reset
+                
+.wait		lda #$60
                 jsr A2_WAIT		; delay ~25 ms, enough for Spikeputor to add to buffer
                 jmp .monitorLoop        ; loop
             	
