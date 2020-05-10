@@ -45,7 +45,8 @@ ZP_MON_FLAGS	equ $FF			; bit 7: 1 = ESC sequence being read
 					; bit 6: 1 = GR, 0 = TEXT mode
                                         ; bit 5: 1 = HGR, 0 = GR mode
                                         ; bit 4: 1 = full screen gr, 0 = mixed gr and text
-                                        ; bit 3: 1 = input mode, 0 = print mode
+                                        ; bit 3: 1 = show cursor, 0 = hide cursor
+                                        ; bit 2: 1 = allow input, 0 = disallow input
 
 ;-----------------------------------------------------------------------------------------
 ; Command dispatches
@@ -152,7 +153,7 @@ UploadVerify	lda #$00		; initialize pointers and page end
 .reset		bit A2_KBD_STRB
 		jsr ResetSpikeputor
 Monitor_IO     	lda #$00
-                sta ZP_MON_FLAGS	; initialize monitor flags
+                sta ZP_MON_FLAGS	; initialize monitor flags on start and reset
                 
 .monitorLoop	lda A2_KBD
                 bpl .stop		; no new input, continue
@@ -186,9 +187,17 @@ Monitor_IO     	lda #$00
 		lda ZP_BUF_IDXH		; get index of first character in buffer = hi byte of buffer address
                 jsr ReadAddress		; get next word from buffer
                 
-                lda #$08		; check bit 3 (input mode on)
+		lda ZP_DATAL		; get lo byte of character data (ascii)
+                                        ; TODO: check for special characters
+                                        ; TODO: handle input and graphics
+                cmp #$20		; check for special characters
+                bpl .normalChar
+                jsr HandleSpecialChar	; handle any special character input
+                bcc .incIdx		; if carry is clear, don't print the character		
+                
+.normalChar     lda #$08		; check bit 3 (cursor on)
 		bit ZP_MON_FLAGS
-                beq .printPrep		; input mode off
+                beq .printPrep		; cursor off
                 
                 ldy A2_CH		; turn cursor blink character to normal
                 lda (A2_BAS),y		; get current cursor character
@@ -198,18 +207,16 @@ Monitor_IO     	lda #$00
                 adc #$a0
                 sta (A2_BAS),y		; store normal version
                 
-.printPrep      lda ZP_DATAL		; get lo byte of character data (ascii)
-                                        ; TODO: check for special characters
-                                        ; TODO: handle input and graphics
-                ora #$80		; make sure text is normal (not flashing or inverse)
+.printPrep      lda ZP_DATAL		; reload character lo byte
+		ora #$80		; set high bit to make text normal (not flashing or inverse)
                 cmp #$E0                ; if character is >= $E0, it's lower case
                 bmi .print
                 and #$DF		; get rid of bit 5 (converts to upper case)
 .print          jsr A2_COUT		; print the character
                 
-                lda #$08		; check bit 3 (input mode on)
+                lda #$08		; check bit 3 (cursor on)
 		bit ZP_MON_FLAGS
-                beq .incIdx		; input mode off
+                beq .incIdx		; cursor off
                 
                 ldy A2_CH		; turn cursor normal character to blink
                 lda (A2_BAS),y		; get current cursor character
@@ -230,7 +237,7 @@ Monitor_IO     	lda #$00
                 ldy #ZP_BUF_IDX
                 jsr WriteAddress	; write new buffer indeces
 
-.checkInput	lda #$08		; check bit 3 (input mode on)
+.checkInput	lda #$04		; check bit 2 (input mode on)
 		bit ZP_MON_FLAGS
                 beq .restart		; input mode off
                 
@@ -253,9 +260,6 @@ Monitor_IO     	lda #$00
                 sta ZP_BUF_OUTCHAR+1	; store the character in lo out byte
                 lda #$00
                 sta ZP_BUF_OUTCHAR	; zero in high out byte
-                
-                lda $C030		; click speaker
-                lda $C030
                 
                 ldx #>SP_IN_BUF_IDX
                 lda #<SP_IN_BUF_IDX
@@ -294,7 +298,25 @@ Monitor_IO     	lda #$00
 .wait		lda #$60
                 jsr A2_WAIT		; delay ~25 ms, enough for Spikeputor to add to buffer
                 jmp .monitorLoop        ; loop
-                
+
+HandleSpecialChar
+		SUBROUTINE
+                cmp #$14		; cursor on
+                bne .n1
+                lda ZP_MON_FLAGS
+                ora #$08		; set flag bit 3
+                sta ZP_MON_FLAGS
+                clc
+                rts
+.n1		cmp #$16		; cursor off
+		bne .exit
+		lda ZP_MON_FLAGS
+                and #$f7		; clear flag bit 3
+                sta ZP_MON_FLAGS
+                clc
+                rts
+.exit		sec
+		rts
 ;----------------------------------------------------------------------------------------
 ; WriteAddress - sets the Spikeputor address and writes the word. 
 ;		set X to ADDRH, A to ADDRL, Y to zero page address of word (big endian)
