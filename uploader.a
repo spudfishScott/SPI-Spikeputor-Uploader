@@ -299,15 +299,17 @@ HandleSpecialChar
                 lda ZP_MON_FLAGS
                 ora #$08		; set flag bit 3
                 sta ZP_MON_FLAGS
-                clc
+                lda #$00
+                sta ZP_DATAL		; "print" nonprintable character
+                sec
                 rts
 .n1		cmp #$16		; cursor off
 		bne .exit
 		lda ZP_MON_FLAGS
                 and #$f7		; clear flag bit 3
                 sta ZP_MON_FLAGS
-                clc
-                rts
+                lda #$00
+                sta ZP_DATAL		; "print" nonprintable character
 .exit		sec
 		rts
 ;----------------------------------------------------------------------------------------
