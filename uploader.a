@@ -9,6 +9,8 @@ SPI_EXEC	equ $C0C0
 SPI_DATA	equ $C0C2
 SPI_RESET	equ $C0C3
 
+A2_BAS		equ $28
+A2_CH		equ $24
 A2_WAIT		equ $FCA8		; Apple Monitor ROM WAIT function
 A2_COUT		equ $FDED		; Apple Monitor ROM Character Out
 A2_KBD		equ $C000		; Apple Keyboard In
@@ -18,18 +20,30 @@ SP_OUT_BUF_LCK	equ $7FB0		; Spikeputor Output Buffer Lock
 SP_OUT_BUF_IDX	equ $7FB2		; Spikeputor Output Buffer Indeces
 SP_OUT_BUF	equ $7E00		; Spikeputor Output Buffer
 
+SP_IN_BUF_LCK	equ $7FB4		; Spikeputor Input Buffer Lock
+SP_IN_BUF_IDX	equ $7FB6		; Spikeputor Input Buffer Indeces
+SP_IN_BUF	equ $7E80		; Spikeputor Input Buffer
+
 ZP_CMD_PKG	equ $EB			; command and data bytes for spi_cmd
 ZP_CMD_STAT	equ $EB			
 ZP_DATAH	equ $EC
 ZP_DATAL	equ $ED
-
-ZP_LENH		equ $EE			; variables for upload_verify
+					; variables for upload_verify
+ZP_LENH		equ $EE			; length
 ZP_LENL		equ $EF
 ZP_VERIFY	equ $FF 		; set to $80 to verify, $00 to write
-ZP_SRC_PTR	equ $F9
+ZP_SRC_PTR	equ $F9			; pointer to source data - starts at $2004
 
-ZP_BUF_IDXH	equ $EE			; variables for monitor_IO
-ZP_BUF_IDXL	equ $EF
+					; variables for monitor_IO
+ZP_BUF_IDX	equ $EE			; buffer index 
+ZP_BUF_IDXH	equ $EE			; (hi byte = first char index)
+ZP_BUF_IDXL	equ $EF			; (lo byte = next open index)
+ZP_BUF_OUTCHAR	equ $F9
+ZP_MON_FLAGS	equ $FF			; bit 7: 1 = ESC sequence being read 
+					; bit 6: 1 = GR, 0 = TEXT mode
+                                        ; bit 5: 1 = HGR, 0 = GR mode
+                                        ; bit 4: 1 = full screen gr, 0 = mixed gr and text
+                                        ; bit 3: 1 = input mode, 0 = print mode
 
 ;-----------------------------------------------------------------------------------------
 ; Command dispatches
@@ -62,7 +76,7 @@ SPICmd		ldx #$00
                 lda #$01
                 jsr A2_WAIT		; wait 30 µs to give time for SPI EXECUTE pulse to finish
                 nop			; wait an additional 8 µs to be sure that 60 elapses between 
-                nop			; SPI end trasaction and SPI begin
+                nop			; SPI end trasaction and next SPI begin
                 nop
                 nop
                 rts
@@ -77,7 +91,7 @@ UploadVerify	lda #$00		; initialize pointers and page end
                 lda #$04
                 sta ZP_SRC_PTR
                 lda #$20
-                sta ZP_SRC_PTR+1
+                sta ZP_SRC_PTR+1	; data starts at $2004
                 
                 lda ZP_LENH		; if less than one page, go right to final page
                 beq .finalPage
@@ -85,7 +99,7 @@ UploadVerify	lda #$00		; initialize pointers and page end
 .pageLoop	lda ZP_VERIFY		; if verify set, verify, otherwise send
                 bmi .verify
                 
-.send		lda (ZP_SRC_PTR),y	; data starts at $2000
+.send		lda (ZP_SRC_PTR),y
 		sta ZP_DATAH		
 		iny 
                 lda (ZP_SRC_PTR),y	; move hi and lo bytes into spi data storage
@@ -133,19 +147,21 @@ UploadVerify	lda #$00		; initialize pointers and page end
 ;		exit on ESC being pressed, A, X, and Y scrambled
 ;----------------------------------------------------------------------------------------    
         	SUBROUTINE
-Monitor_IO	jsr StopSpikeputor
+Monitor_IO     lda #$00
+                sta ZP_MON_FLAGS	; initialize monitor flags
+.monitorLoop	jsr StopSpikeputor
                 ldx #>SP_OUT_BUF_LCK
                 lda #<SP_OUT_BUF_LCK
-                jsr ReadAddress		; read buffer lock
+                jsr ReadAddress		; read output buffer lock
                 lda ZP_DATAH
-                bne .restart		; if not zero, buffer is locked
+                bne .checkInput		; if not zero, buffer is locked, check input buffer
  
                 ldx #>SP_OUT_BUF_IDX
                 lda #<SP_OUT_BUF_IDX
                 jsr ReadAddress		; read buffer indeces
                 lda ZP_DATAH
                 cmp ZP_DATAL
-                beq .restart		; if start index is the same as last open index, nothing to read
+                beq .checkInput		; if start index is the same as last open index, nothing to read
                 
                 sta ZP_BUF_IDXH		; save the buffer indeces
                 lda ZP_DATAL
@@ -154,16 +170,38 @@ Monitor_IO	jsr StopSpikeputor
 .bufLoop	ldx #>SP_OUT_BUF
 		lda ZP_BUF_IDXH		; get index of first character in buffer = hi byte of buffer address
                 jsr ReadAddress		; get next word from buffer
-                lda ZP_DATAL		; get lo byte of character data (ascii)
+                
+                lda #$08		; check bit 3 (input mode on)
+		bit ZP_MON_FLAGS
+                beq .print		; input mode off
+                
+                ldy A2_CH		; turn cursor blink character to normal
+                lda (A2_BAS),y		; get current cursor character
+                and #$3f
+                eor #$20
+                adc #$a0
+                
+.print          lda ZP_DATAL		; get lo byte of character data (ascii)
                                         ; TODO: check for special characters
                                         ; TODO: handle input and graphics
                 ora #$80		; make sure text is normal (not flashing or inverse)
                 cmp #$E0                ; if character is >= $E0, it's lower case
                 bmi .print
                 and #$DF		; get rid of bit 5 (converts to upper case)
-.print          jsr A2_COUT		; print the character
-                lda ZP_BUF_IDXH
-                clc
+                jsr A2_COUT		; print the character
+                
+                lda #$08		; check bit 3 (input mode on)
+		bit ZP_MON_FLAGS
+                beq .incIdx		; input mode off
+                
+                ldy A2_CH		; turn cursor normal character to blink
+                lda (A2_BAS),y		; get current cursor character
+                and #$3f
+                ora #$40
+                sta (A2_BAS),y
+                
+.incIdx         lda ZP_BUF_IDXH
+		clc
                 adc #$02		; go to next index
                 and #$7f		; wrap index around to $00 after $7f
                 sta ZP_BUF_IDXH
@@ -172,33 +210,73 @@ Monitor_IO	jsr StopSpikeputor
                 
                 ldx #>SP_OUT_BUF_IDX
                 lda #<SP_OUT_BUF_IDX
-                ldy #ZP_BUF_IDXH
+                ldy #ZP_BUF_IDX
                 jsr WriteAddress	; write new buffer indeces
+
+.checkInput	lda #$08		; check bit 3 (input mode on)
+		bit ZP_MON_FLAGS
+                beq .restart		; input mode off
                 
-.restart	jsr RestartSpikeputor
+                ldx #>SP_IN_BUF_LCK
+                lda #<SP_IN_BUF_LCK
+                jsr ReadAddress		; read input buffer lock
+                lda ZP_DATAH
+                bne .restart		; if not zero, buffer is locked, resume
                 
-                lda A2_KBD		; check for keyboard interrupt
-                bpl .wait		; no new key pressed
+                lda A2_KBD
+                bpl .restart		; no new input, restart Spikeputor
                 
                 cmp A2_KBD_STRB		; clear keyboard strobe
-                cmp #$9b		; if esc is pressed, end
+                cmp #$91		; if ctrl-q is pressed, end
                 beq .return
                 cmp #$80		; if ctrl-shift-p pressed, reset
                 beq .reset
-
-.wait	      	lda #$60
+                
+                and #$7f		; regular key pressed: strip out strobe bit
+                sta ZP_BUF_OUTCHAR+1	; store the character in lo out byte
+                lda #$00
+                sta ZP_BUF_OUTCHAR	; zero in high out byte
+                
+                ldx #>SP_IN_BUF_IDX
+                lda #<SP_IN_BUF_IDX
+                jsr ReadAddress		; read input buffer indeces
+                lda ZP_DATAH		; save the buffer indeces
+                sta ZP_BUF_IDXH		; start index
+                lda ZP_DATAL
+                sta ZP_BUF_IDXL		; next open index
+                
+                ldx #>SP_IN_BUF
+		ora #$80		; add 80 to the next index to get input buffer address
+		ldy #ZP_BUF_OUTCHAR	; point Y to the data to write
+                jsr WriteAddress
+                
+                lda ZP_BUF_IDXL
+                clc
+                adc #$02		; go to next index
+                and #$7f		; wrap index around to $00 after $7f
+                sta ZP_BUF_IDXL
+                cmp ZP_BUF_IDXH		; check if last open index is first index - buffer overflow
+                bne .writeInput
+                
+                lda ZP_BUF_IDXH		; increment start index
+                adc #$02		; carry can't be set from last add since $7f+$02 is never overflow
+                and #$7f		; wrap index around to $00 after $7f
+                sta ZP_BUF_IDXH
+                
+.writeInput 	ldx #>SP_OUT_BUF_IDX
+                lda #<SP_OUT_BUF_IDX
+                ldy #ZP_BUF_IDX
+                jsr WriteAddress	; write new buffer indeces               
+                
+.restart	jsr RestartSpikeputor
+		lda #$60
                 jsr A2_WAIT		; delay ~25 ms, enough for Spikeputor to add to buffer
-                jmp Monitor_IO          ; loop
+                jmp .monitorLoop        ; loop
             	
-.reset		lda #$c0
-		sta ZP_CMD_STAT
-                jsr SPICmd		; reset Spikeputor
-                lda #$e0
-                jsr A2_WAIT		; allow Spikeputor to reset
-                jmp Monitor_IO
+.reset		jsr ResetSpikeputor
+                jmp .monitorLoop
                 
 .return		rts
-
 ;----------------------------------------------------------------------------------------
 ; WriteAddress - sets the Spikeputor address and writes the word. 
 ;		set X to ADDRH, A to ADDRL, Y to zero page address of word (big endian)
@@ -266,5 +344,24 @@ RestartSpikeputor
 		lda #$e0
 		sta ZP_CMD_STAT
                 jsr SPICmd		; restart Spikeputor
+                rts
+                
+;----------------------------------------------------------------------------------------
+; ResetSpikeputor - sends the Spikeputor a reset command and waits until it resets
+;		    - A and X scrambled.
+;----------------------------------------------------------------------------------------                
+		SUBROUTINE
+ResetSpikeputor
+		lda #$c0
+		sta ZP_CMD_STAT
+                jsr SPICmd		; reset Spikeputor
+.waitForReset	lda #$80
+ 		sta ZP_CMD_STAT
+                jsr SPICmd		; check to see that it is stopped
+                lda #$20		; check status bit 5 (RESET) to see if it has happened
+                bit ZP_CMD_STAT
+                beq .waitForReset	; if bit 5 is set, not yet stopped
+                lda #$e0
+                jsr A2_WAIT		; allow Spikeputor to reset
                 rts
                 
