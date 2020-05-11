@@ -14,7 +14,12 @@ A2_WNDLFT	equ $20
 A2_WNDTOP	equ $22
 A2_CH		equ $24
 A2_CV		equ $25
+
+A2_HGR		equ $F3E2		; Applesoft HGR Command
+A2_CLRSCR	equ $F832		; Apple Monitor ROM Clear GR Screen
+A2_CLRTOP	equ $F836		; Apple Monitor ROM Clear top of GR Screen (mixed mode)		
 A2_WAIT		equ $FCA8		; Apple Monitor ROM WAIT function
+A2_HOME		equ $FC58		; Apple Monitor ROM HOME function
 A2_COUT		equ $FDED		; Apple Monitor ROM Character Out
 A2_KBD		equ $C000		; Apple Keyboard In
 A2_KBD_STRB	equ $C010		; Apple Keyboard Strobe Clear
@@ -294,6 +299,7 @@ SetCursorNormal				; turn cursor blink character to normal
                 adc #$a0
                 sta (A2_BAS),y		; store normal version
                 rts
+                
 SetCursorFlash				; turn cursor normal character to blink
 		SUBROUTINE
                 ldy A2_CH		
@@ -301,6 +307,21 @@ SetCursorFlash				; turn cursor normal character to blink
                 and #$3f		; isolate character data
                 ora #$40		; make it blink
                 sta (A2_BAS),y		; store blink version
+                rts
+                
+ClearScreen	SUBROUTINE
+		bit ZP_MON_FLAGS	; test bit 6: graphics or text mode?
+                bvs .clrGraphics
+                jmp A2_HOME
+.clrGraphics	lda #$20
+		bit ZP_MON_FLAGS	; test bit 5: GR or HGR
+                bne .clrHGR
+                lda #$10		
+                bit ZP_MON_FLAGS	; test bit 4: full screen or mixed
+                bne .clrMixed
+                jmp A2_CLRSCR
+.clrMixed	jmp A2_CLRTOP
+.clrHGR         jmp A2_HGR  
                 rts
                 
 HandleSpecialChar			; exit with carry set if ZP_DATAL should be printed
@@ -349,13 +370,18 @@ HandleSpecialChar			; exit with carry set if ZP_DATAL should be printed
 .cr		lda A2_WNDLFT		; move cursor horizontal to beginning of line
                 sta A2_CH
                 jmp .printNull		; need to print something to set cursor
-.n6
+.n6		cmp #$0e		; clear current display
+		bne .n7
+                jsr ClearScreen
+                clc
+                rts
+.n7
 		clc			; default - don't print anything
 		rts
 .passThrough	sec
 		rts
 .printNull	lda #$00
-.printNull0     sta ZP_DATAL		; "print" nonprintable character
+		sta ZP_DATAL		; "print" nonprintable character to update cursor
                 sec
                 rts
 ;----------------------------------------------------------------------------------------
