@@ -20,7 +20,7 @@ A2_CV		equ $25
 A2_HGR		equ $F3E2		; Applesoft HGR Command
 A2_CLRSCR	equ $F832		; Apple Monitor ROM Clear GR Screen
 A2_CLRTOP	equ $F836		; Apple Monitor ROM Clear top of GR Screen (mixed mode)
-A2_VTAB		equ $FC22		; Apple Monitor ROM VTAB command
+A2_TABV		equ $FB5B		; Apple Monitor ROM TABV command
 A2_WAIT		equ $FCA8		; Apple Monitor ROM WAIT function
 A2_HOME		equ $FC58		; Apple Monitor ROM HOME function
 A2_COUT		equ $FDED		; Apple Monitor ROM Character Out
@@ -383,10 +383,10 @@ HandleSpecialChar			; exit with carry set if ZP_DATAL should be printed
 .n5		cmp #$0c		; home cursor
 		bne .n6
                 jsr SetCursorNormal
-                lda A2_WNDTOP		; move cursor vertical to top of window
-                sta A2_CV
-.cr		lda A2_WNDLFT		; move cursor horizontal to beginning of line
-                sta A2_CH
+                lda #$00
+                jsr A2_TABV		; set vtab = 0
+.cr		lda #$00
+                sta A2_CH		; set htab = 0
                 jmp .printNull		; need to print something to set cursor
 .n6		cmp #$0e		; clear current display
 		bne .n7
@@ -432,10 +432,9 @@ HandleEscape	SUBROUTINE
                 cmp ZP_DATAL
                 bpl .setPosn
                 sta ZP_DATAL		; if param is > max, store max
-.setPosn	sta A2_CV
+.setPosn	jsr A2_TABV		; set vtab
                 lda ZP_DATAH
-                sta A2_CH
-                jsr A2_VTAB		; recalculate the current cursor location
+                sta A2_CH		; set htab
 		jmp .completed
 .n1          
 .completed	lda ZP_MON_FLAGS
