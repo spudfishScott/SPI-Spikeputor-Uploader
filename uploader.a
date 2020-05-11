@@ -398,6 +398,7 @@ HandleSpecialChar			; exit with carry set if ZP_DATAL should be printed
 		bne .default
                 lda ZP_MON_FLAGS
 		ora #$80		; set flag bit 7
+                sta ZP_MON_FLAGS
 .default	clc			; default - don't print anything
 		rts
                 
