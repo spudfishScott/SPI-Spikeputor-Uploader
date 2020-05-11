@@ -195,7 +195,6 @@ Monitor_IO 	bit A2_KBD_STRB		; clear keyboard strobe
 .normalChar     lda #$08		; check bit 3 (cursor on)
 		bit ZP_MON_FLAGS
                 beq .printPrep		; cursor is off
-                
                 jsr SetCursorNormal	; set current cursor position to normal
                 
 .printPrep      lda ZP_DATAL		; reload character lo byte
@@ -208,7 +207,6 @@ Monitor_IO 	bit A2_KBD_STRB		; clear keyboard strobe
                 lda #$08		; check bit 3 (cursor on)
 		bit ZP_MON_FLAGS
                 beq .incIdx		; cursor is off
-                
                	jsr SetCursorFlash	; set new cursor position to flashing
                 
 .incIdx         lda ZP_BUF_IDXH
@@ -303,6 +301,7 @@ SetCursorFlash				; turn cursor normal character to blink
                 and #$3f		; isolate character data
                 ora #$40		; make it blink
                 sta (A2_BAS),y		; store blink version
+                rts
                 
 HandleSpecialChar			; exit with carry set if ZP_DATAL should be printed
 		SUBROUTINE
