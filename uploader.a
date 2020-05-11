@@ -292,7 +292,7 @@ Monitor_IO     	lda #$00
                 jsr A2_WAIT		; delay ~25 ms, enough for Spikeputor to add to buffer
                 jmp .monitorLoop        ; loop
 
-HandleSpecialChar
+HandleSpecialChar			; exit with carry set if ZP_DATAL should be printed
 		SUBROUTINE
                 cmp #$14		; cursor on
                 bne .n1
@@ -304,13 +304,29 @@ HandleSpecialChar
                 sec
                 rts
 .n1		cmp #$16		; cursor off
-		bne .exit
+		bne .n2
 		lda ZP_MON_FLAGS
                 and #$f7		; clear flag bit 3
                 sta ZP_MON_FLAGS
                 lda #$00
                 sta ZP_DATAL		; "print" nonprintable character
-.exit		sec
+                sec
+                rts
+.n2		cmp #$15		; input mode on
+		bne .n3
+                lda ZP_MON_FLAGS
+                ora #$04		; set flag bit 2
+                sta ZP_MON_FLAGS
+                clc
+                rts
+.n3		cmp #$17		; input mode off
+		bne .n4
+                lda ZP_MON_FLAGS
+                and #$fb		; clear flag bit 2
+                clc
+                rts
+.n4
+.exit		clc
 		rts
 ;----------------------------------------------------------------------------------------
 ; WriteAddress - sets the Spikeputor address and writes the word. 
