@@ -312,12 +312,14 @@ HandleSpecialChar			; exit with carry set if ZP_DATAL should be printed
                 beq .passThrough
                 cmp #$14		; cursor on
                 bne .n1
+                jsr SetCursorFlash
                 lda ZP_MON_FLAGS
                 ora #$08		; set flag bit 3
                 sta ZP_MON_FLAGS
                 jmp .printNull		; exit by printing null character
 .n1		cmp #$16		; cursor off
 		bne .n2
+                jsr SetCursorNormal
 		lda ZP_MON_FLAGS
                 and #$f7		; clear flag bit 3
                 sta ZP_MON_FLAGS
