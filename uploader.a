@@ -193,19 +193,19 @@ Monitor_IO 	bit A2_KBD_STRB		; clear keyboard strobe
 .bufLoop	ldx #>SP_OUT_BUF
 		lda ZP_BUF_IDXH		; get index of first character in buffer = hi byte of buffer address
                 jsr ReadAddress		; get next word from buffer
+                		
+                bit ZP_MON_FLAGS	; is an escape sequence being read?
+		bpl .specCheck		; no? continue
+                jsr HandleEscape	; if so, handle it
+                jmp .checkInput		; never need to update text after an escape command
                 
-		lda ZP_DATAL		; get lo byte of character data (ascii)
+.specCheck	lda ZP_DATAL		; get lo byte of character data (ascii)
                                         ; TODO: check for special characters
                                         ; TODO: handle input and graphics
                 cmp #$20		; check for special characters
-                bpl .escCheck		; check if we're in an escape character sequence
+                bpl .normalChar		; if not, check if we're in an escape character sequence
                 jsr HandleSpecialChar	; handle any special character input
                 bcc .incIdx		; if carry is clear, don't print the character	
-                
-.escCheck	bit ZP_MON_FLAGS	; is an escape sequence being read?
-		bpl .normalChar		; no? continue
-                jsr HandleEscape	; if so, handle it
-                jmp .checkInput		; never need to update text after an escape command
                 
 .normalChar     lda #$08		; check bit 3 (cursor on)
 		bit ZP_MON_FLAGS
@@ -408,7 +408,7 @@ HandleEscape	SUBROUTINE
                 bne .handleParam	; is this the command or a parameter
                 
                 lda ZP_DATAL		; get the command
-          	ldx #$06		; check to see if it's valid
+          	ldx #$00		; check to see if it's valid
 .checkLoop      cmp .escapeCommands,x
                 beq .valid
                 dex
