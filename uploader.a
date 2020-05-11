@@ -10,7 +10,10 @@ SPI_DATA	equ $C0C2
 SPI_RESET	equ $C0C3
 
 A2_BAS		equ $28
+A2_WNDLFT	equ $20
+A2_WNDTOP	equ $22
 A2_CH		equ $24
+A2_CV		equ $25
 A2_WAIT		equ $FCA8		; Apple Monitor ROM WAIT function
 A2_COUT		equ $FDED		; Apple Monitor ROM Character Out
 A2_KBD		equ $C000		; Apple Keyboard In
@@ -40,7 +43,8 @@ ZP_SRC_PTR	equ $F9			; pointer to source data - starts at $2004
 ZP_BUF_IDX	equ $EE			; buffer index 
 ZP_BUF_IDXH	equ $EE			; (hi byte = first char index)
 ZP_BUF_IDXL	equ $EF			; (lo byte = next open index)
-ZP_BUF_OUTCHAR	equ $F9
+ZP_BUF_OUTCHAR	equ $F9			; 2 byte character output
+ZP_ESCAPE_CODE	equ $FB			; storage for escape command
 ZP_MON_FLAGS	equ $FF			; bit 7: 1 = ESC sequence being read 
 					; bit 6: 1 = GR, 0 = TEXT mode
                                         ; bit 5: 1 = HGR, 0 = GR mode
@@ -143,20 +147,20 @@ UploadVerify	lda #$00		; initialize pointers and page end
 ;		exit on ESC being pressed, A, X, and Y scrambled
 ;----------------------------------------------------------------------------------------    
         	SUBROUTINE
-.reset		bit A2_KBD_STRB
+Monitor_IO 	bit A2_KBD_STRB		; clear keyboard strobe
 		jsr ResetSpikeputor
-Monitor_IO     	lda #$00
+	    	lda #$00
                 sta ZP_MON_FLAGS	; initialize monitor flags on start and reset
                 
 .monitorLoop	lda A2_KBD
-                bpl .stop		; no new input, continue
+                bpl .stop		; no new input, continue, don't clear strobe
                 
                 cmp #$91		; if ctrl-q is pressed, end
                 bne .nextChk
                 bit A2_KBD_STRB		; clear keyboard strobe
                 rts
-.nextChk        cmp #$80		; if ctrl-shift-p pressed, reset
-                beq .reset
+.nextChk        cmp #$80		; if ctrl-shift-p pressed, reset and restart monitoring
+                beq Monitor_IO
                 
 .stop		jsr StopSpikeputor
                 ldx #>SP_OUT_BUF_LCK
@@ -190,12 +194,12 @@ Monitor_IO     	lda #$00
                 
 .normalChar     lda #$08		; check bit 3 (cursor on)
 		bit ZP_MON_FLAGS
-                beq .printPrep		; cursor off
+                beq .printPrep		; cursor is off
                 
                 ldy A2_CH		; turn cursor blink character to normal
                 lda (A2_BAS),y		; get current cursor character
-                and #$3f
-                eor #$20
+                and #$3f		; isolate character data
+                eor #$20		; convert to normal version
                 clc
                 adc #$a0
                 sta (A2_BAS),y		; store normal version
@@ -209,12 +213,12 @@ Monitor_IO     	lda #$00
                 
                 lda #$08		; check bit 3 (cursor on)
 		bit ZP_MON_FLAGS
-                beq .incIdx		; cursor off
+                beq .incIdx		; cursor is off
                 
                 ldy A2_CH		; turn cursor normal character to blink
                 lda (A2_BAS),y		; get current cursor character
-                and #$3f
-                ora #$40
+                and #$3f		; isolate character data
+                ora #$40		; make it blink
                 sta (A2_BAS),y		; store blink version
                 
 .incIdx         lda ZP_BUF_IDXH
@@ -294,24 +298,22 @@ Monitor_IO     	lda #$00
 
 HandleSpecialChar			; exit with carry set if ZP_DATAL should be printed
 		SUBROUTINE
+                cmp #$08		; backspace - just pass it through
+		beq .passThrough
+		cmp #$0a		; line feed - just pass it through
+                beq .passThrough
                 cmp #$14		; cursor on
                 bne .n1
                 lda ZP_MON_FLAGS
                 ora #$08		; set flag bit 3
                 sta ZP_MON_FLAGS
-                lda #$00
-                sta ZP_DATAL		; "print" nonprintable character
-                sec
-                rts
+                jmp .printNull		; exit by printing null character
 .n1		cmp #$16		; cursor off
 		bne .n2
 		lda ZP_MON_FLAGS
                 and #$f7		; clear flag bit 3
                 sta ZP_MON_FLAGS
-                lda #$00
-                sta ZP_DATAL		; "print" nonprintable character
-                sec
-                rts
+                jmp .printNull
 .n2		cmp #$15		; input mode on
 		bne .n3
                 lda ZP_MON_FLAGS
@@ -323,11 +325,27 @@ HandleSpecialChar			; exit with carry set if ZP_DATAL should be printed
 		bne .n4
                 lda ZP_MON_FLAGS
                 and #$fb		; clear flag bit 2
+                sta ZP_MON_FLAGS
                 clc
                 rts
-.n4
-.exit		clc
+.n4		cmp #$0d		; carriage return
+		beq .cr
+.n5		cmp #$0c		; home cursor
+		bne .n6
+                lda A2_WNDTOP		; move cursor vertical to top of window
+                sta A2_CV
+.cr		lda A2_WNDLFT		; move cursor horizontal to beginning of line
+                sta A2_CH
+                jmp .printNull		; need to print something to set cursor
+.n6
+		clc			; default - don't print anything
 		rts
+.passThrough	sec
+		rts
+.printNull	lda #$00
+.printNull0     sta ZP_DATAL		; "print" nonprintable character
+                sec
+                rts
 ;----------------------------------------------------------------------------------------
 ; WriteAddress - sets the Spikeputor address and writes the word. 
 ;		set X to ADDRH, A to ADDRL, Y to zero page address of word (big endian)
