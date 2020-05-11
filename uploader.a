@@ -196,13 +196,7 @@ Monitor_IO 	bit A2_KBD_STRB		; clear keyboard strobe
 		bit ZP_MON_FLAGS
                 beq .printPrep		; cursor is off
                 
-                ldy A2_CH		; turn cursor blink character to normal
-                lda (A2_BAS),y		; get current cursor character
-                and #$3f		; isolate character data
-                eor #$20		; convert to normal version
-                clc
-                adc #$a0
-                sta (A2_BAS),y		; store normal version
+                jsr SetCursorNormal	; set current cursor position to normal
                 
 .printPrep      lda ZP_DATAL		; reload character lo byte
 		ora #$80		; set high bit to make text normal (not flashing or inverse)
@@ -215,11 +209,7 @@ Monitor_IO 	bit A2_KBD_STRB		; clear keyboard strobe
 		bit ZP_MON_FLAGS
                 beq .incIdx		; cursor is off
                 
-                ldy A2_CH		; turn cursor normal character to blink
-                lda (A2_BAS),y		; get current cursor character
-                and #$3f		; isolate character data
-                ora #$40		; make it blink
-                sta (A2_BAS),y		; store blink version
+               	jsr SetCursorFlash	; set new cursor position to flashing
                 
 .incIdx         lda ZP_BUF_IDXH
 		clc
@@ -296,6 +286,24 @@ Monitor_IO 	bit A2_KBD_STRB		; clear keyboard strobe
                 jsr A2_WAIT		; delay ~25 ms, enough for Spikeputor to add to buffer
                 jmp .monitorLoop        ; loop
 
+SetCursorNormal				; turn cursor blink character to normal
+		SUBROUTINE
+                ldy A2_CH		
+                lda (A2_BAS),y		; get current cursor character
+                and #$3f		; isolate character data
+                eor #$20		; convert to normal version
+                clc
+                adc #$a0
+                sta (A2_BAS),y		; store normal version
+                rts
+SetCursorFlash				; turn cursor normal character to blink
+		SUBROUTINE
+                ldy A2_CH		
+                lda (A2_BAS),y		; get current cursor character
+                and #$3f		; isolate character data
+                ora #$40		; make it blink
+                sta (A2_BAS),y		; store blink version
+                
 HandleSpecialChar			; exit with carry set if ZP_DATAL should be printed
 		SUBROUTINE
                 cmp #$08		; backspace - just pass it through
@@ -329,9 +337,12 @@ HandleSpecialChar			; exit with carry set if ZP_DATAL should be printed
                 clc
                 rts
 .n4		cmp #$0d		; carriage return
-		beq .cr
+		bne .n5
+                jsr SetCursorNormal
+                jmp .cr
 .n5		cmp #$0c		; home cursor
 		bne .n6
+                jsr SetCursorNormal
                 lda A2_WNDTOP		; move cursor vertical to top of window
                 sta A2_CV
 .cr		lda A2_WNDLFT		; move cursor horizontal to beginning of line
