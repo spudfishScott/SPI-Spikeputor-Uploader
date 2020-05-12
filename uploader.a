@@ -26,8 +26,16 @@ A2_TABV		equ $FB5B		; Apple Monitor ROM set vertical cursor command
 A2_WAIT		equ $FCA8		; Apple Monitor ROM WAIT function
 A2_HOME		equ $FC58		; Apple Monitor ROM HOME function
 A2_COUT		equ $FDED		; Apple Monitor ROM Character Out
+
 A2_KBD		equ $C000		; Apple Keyboard In
 A2_KBD_STRB	equ $C010		; Apple Keyboard Strobe Clear
+A2_TXTCLR	equ $C050		; Apple Soft Switch: Graphics Mode On
+A2_TXTSET	equ $C051		; Apple Soft Switch: Text Mode On
+A2_MIXCLR	equ $C052		; Apple Soft Switch: Mixed Mode Off
+A2_MIXSET	equ $C053		; Apple Soft Switch: Mixed Mode On
+A2_LORES	equ $C056		; Apple Soft Switch: Lores Graphics
+A2_HIRES	equ $C057		; Apple Soft Switch: Hires Graphics
+
 
 SP_OUT_BUF_LCK	equ $7FB0		; Spikeputor Output Buffer Lock
 SP_OUT_BUF_IDX	equ $7FB2		; Spikeputor Output Buffer Indeces
@@ -333,13 +341,29 @@ ClearScreen	SUBROUTINE
                 bne .clrHGR
                 lda #$10		
                 bit ZP_MON_FLAGS	; test bit 4: full screen or mixed
-                bne .clrMixed
-                jmp A2_CLRSCR
-.clrMixed	jmp A2_CLRTOP
-.clrHGR         jmp A2_HGR
+                beq .clrMixed
+                jmp A2_CLRSCR		; clear full screen lores graphics
+.clrMixed	jmp A2_CLRTOP		; clear mixed screen lores graphics
+.clrHGR         jmp A2_HGR		; clear hires screen
 
 ;----------------------------------------------------------------------------------------
 SetGraphicsMode	SUBROUTINE
+		bit ZP_MON_FLAGS	; test bit 6: graphics or text mode
+                bvs .setGraphics
+                sta A2_TXTSET		; text mode. Set text and exit.
+                rts
+.setGraphics	lda #$20
+		bit ZP_MON_FLAGS	; test bit 5: GR or HGR
+                bne .setHGR
+                sta A2_LORES		; set lo-res grpahics
+                beq .textMix
+.setHGR		sta A2_HIRES
+.textMix	lda #$10
+		bit ZP_MON_FLAGS	; test bit 4: full screen or mixed
+                bne .full
+                sta A2_MIXSET		; set mixed screen mode
+                rts
+.full		sta A2_MIXCLR		; set full screen mode
 		rts
 ;----------------------------------------------------------------------------------------
 HandleSpecialChar			; exit with carry set if ZP_DATAL should be printed
@@ -448,12 +472,12 @@ HandleEscape	SUBROUTINE
 		bne .n2
                 lda #$20
 		bit ZP_MON_FLAGS	; test bit 5: GR or HGR?
-                bne .hgr
+                bne .hires
                 lda ZP_DATAL
                 and #$0f		; only take lower nybble
                 jsr A2_SETCOL
                 jmp .completed
-.hgr            lda ZP_DATAL
+.hires          lda ZP_DATAL
 		and #$07		; only take lower 3 bits
                 tax
                 jsr A2_SETHCOL
