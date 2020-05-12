@@ -14,8 +14,11 @@ A2_CV		equ $25			; Apple cursor V-position - do not set directly!
 A2_BAS		equ $28			; Apple current cursor text buffer address
 A2_HGRPAGE	equ $E6			; Apple hi byte of current HGR page buffer address
 
-A2_HCLEAR	equ $F3F2		; Applesoft HCLEAR Command (clear hgr buffer)
+A2_HCLEAR	equ $F3F2		; Applesoft HCLEAR command (clear hgr buffer)
+A2_HPLOT	equ $F411		; Applesoft HPLOT command
+A2_HGLIN	equ $F53A		; Applesoft HGLIN command (draw a line from last plotted point)
 A2_SETHCOL	equ $F6F0		; Applesoft set HCOLOR command
+A2_PLOT		equ $F800		; Applesoft Monitor ROM Lo-res plot command
 A2_CLRSCR	equ $F832		; Apple Monitor ROM Clear GR Screen
 A2_CLRTOP	equ $F836		; Apple Monitor ROM Clear top of GR Screen (mixed mode)
 A2_SETCOL	equ $F864		; Apple Monitor ROM Set color command
@@ -60,7 +63,9 @@ ZP_BUF_IDXH	equ $EE			; (hi byte = first char index)
 ZP_BUF_IDXL	equ $EF			; (lo byte = next open index)
 ZP_BUF_OUTCHAR	equ $F9			; 2 byte character output
 ZP_ESCAPE_CODE	equ $FB			; storage for escape command
-ZP_LINE_RNG	equ $FC			; storage for hline and vline range argument
+ZP_FIRST	equ $FC			; storage for first of two paramters
+ZP_FIRSTH	equ $FC			; hi byte
+ZP_FIRSTL	equ $FD			; lo byte
 ZP_MON_FLAGS	equ $FF			; bit 7: 1 = ESC sequence being read 
 					; bit 6: 1 = GR, 0 = TEXT mode
                                         ; bit 5: 1 = HGR, 0 = GR mode
@@ -168,7 +173,9 @@ Monitor_IO 	bit A2_KBD_STRB		; clear keyboard strobe
 	    	lda #$00
                 sta ZP_MON_FLAGS	; initialize monitor flags on start and reset
                 sta ZP_ESCAPE_CODE	; initialize escape command
-                sta ZP_LINE_RNG		; initialize 1st paramter for hlin and vlin
+                sta ZP_FIRSTL		; initialize 1st paramter storage
+                lda #$ff
+                sta ZP_FIRSTH		; $ff = empty
                 lda #$20
                 sta A2_HGRPAGE		; set page 1 for hi-res graphics
                 
@@ -436,21 +443,22 @@ HandleEscape	SUBROUTINE
 		lda ZP_ESCAPE_CODE
                 bne .handleParam	; is this the command or a parameter
                 
-                lda ZP_DATAL		; get the command
-          	ldx #$02		; check to see if it's valid
+                lda ZP_DATAL		; get the command and check it
+          	ldx #$06		; check to see if it's valid
 .checkLoop      cmp .escapeCommands,x
                 beq .valid
                 dex
                 bpl .checkLoop		; keep checking
-                bmi .completed		; command not found, so clear escape sequence
+                jmp .completed		; command not found, so clear escape sequence
                 
 .valid          sta ZP_ESCAPE_CODE	; save the escape code and wait for parameter
                 rts
                 
-.escapeCommands	hex 48 4c 47 ;50 68 70 76
+.escapeCommands	hex 48 4c 47 50 6c 70 76; 68 76 
 
 .handleParam	lda ZP_ESCAPE_CODE	; get the escape command
 
+; one paramter commands
                 cmp #$48		; set cursor position
                 bne .n1
                 jsr SetCursorNormal	; if moving cursor position, stop flashing
@@ -499,7 +507,42 @@ HandleEscape	SUBROUTINE
                 jsr SetGraphicsMode
 		jmp .completed
 
-.n3
+.n3		cmp #$50		; GR Plot
+		bne .n4
+   		lda ZP_DATAL		; y coordinate in accumulator
+                ldy ZP_DATAH		; x coordinate in y register
+                jsr A2_PLOT		; call Apple lo-res plot function
+                jmp .completed
+  
+ ; two paramter commands 
+.n4      	lda ZP_FIRSTH		; check to see if we already have the first paramter
+                cmp #$ff
+                bne .finishCommand
+                lda ZP_DATAH		; save first parameter and wait for next one
+                sta ZP_FIRSTH
+                lda ZP_DATAL
+                sta ZP_FIRSTL
+                rts			; exit without clearing any flags so next param comes in
+                
+.finishCommand	cmp #$70		; HGR Plot
+		bne .n5
+	        lda ZP_DATAL		; y coordinate
+                ldx ZP_FIRSTH		; x coordinate
+                ldy ZP_FIRSTL
+                jsr A2_HPLOT
+                jmp .complete2Param
+                
+.n5             cmp #$6c		; HGR Lineto
+		bne .n6
+                lda ZP_FIRSTH		; x coordinate
+                ldx ZP_FIRSTL
+                ldy ZP_DATAL		; y coordinatre
+                jsr A2_HGLIN
+                jmp .complete2Param
+.n6
+
+.complete2Param	lda #$ff
+		sta ZP_FIRSTH		; clear out first parameter
 .completed	lda ZP_MON_FLAGS
                 and #$7f		; clear escape code flag
                 sta ZP_MON_FLAGS
