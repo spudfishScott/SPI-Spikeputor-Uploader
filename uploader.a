@@ -424,15 +424,16 @@ HandleEscape	SUBROUTINE
                 cmp #$48		; set cursor position
                 bne .n1
                 jsr SetCursorNormal	; if moving cursor position, stop flashing
-              	lda #$27		; check parameters
-           	cmp ZP_DATAH
-                bpl .chkY
-                sta ZP_DATAH		; if param is > max, store max
-.chkY           lda #$17
-                cmp ZP_DATAL
-                bpl .setPosn
+              	lda #$17		; check parameters
+           	cmp ZP_DATAL
+                bpl .chkX
                 sta ZP_DATAL		; if param is > max, store max
-.setPosn	jsr A2_TABV		; set vtab
+.chkX           lda #$27
+                cmp ZP_DATAH
+                bpl .setPosn
+                sta ZP_DATAH		; if param is > max, store max
+.setPosn	lda ZP_DATAL		; somehow this is required or it doesn't work!
+		jsr A2_TABV		; set vtab
                 lda ZP_DATAH
                 sta A2_CH		; set htab
 		jmp .completed
