@@ -486,7 +486,7 @@ HandleEscape	SUBROUTINE
 .n2		cmp #$47		; set graphics modes
 		bne .n3
 		lda ZP_MON_FLAGS
-                and #$c7		; clear bits 4, 5 and 6
+                and #$8f		; clear bits 4, 5 and 6
                 sta ZP_MON_FLAGS
 		lda ZP_DATAL
                 and #$07		; take low three bits
