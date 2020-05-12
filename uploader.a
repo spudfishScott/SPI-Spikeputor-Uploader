@@ -488,7 +488,7 @@ HandleEscape	SUBROUTINE
 		lda ZP_MON_FLAGS
                 and #$c7		; clear bits 4, 5 and 6
                 sta ZP_MON_FLAGS
-		lda ZP_DATAH
+		lda ZP_DATAL
                 and #$07		; take low three bits
                 asl			; shift into place
                 asl
