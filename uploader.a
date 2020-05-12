@@ -9,15 +9,12 @@ SPI_EXEC	equ $C0C0
 SPI_DATA	equ $C0C2
 SPI_RESET	equ $C0C3
 
-A2_BAS		equ $28
-A2_WNDLFT	equ $20
-A2_WNDWDTH	equ $21
-A2_WNDTOP	equ $22
-A2_WNDBTM	equ $23
-A2_CH		equ $24
-A2_CV		equ $25
+A2_CH		equ $24			; Apple cursor H-position
+A2_CV		equ $25			; Apple cursor V-position - do not set directly!
+A2_BAS		equ $28			; Apple current cursor text buffer address
+A2_HGRPAGE	equ $E6			; Apple hi byte of current HGR page buffer address
 
-A2_HGR		equ $F3E2		; Applesoft HGR Command
+A2_HCLEAR	equ $F3F2		; Applesoft HCLEAR Command (clear hgr buffer)
 A2_SETHCOL	equ $F6F0		; Applesoft set HCOLOR command
 A2_CLRSCR	equ $F832		; Apple Monitor ROM Clear GR Screen
 A2_CLRTOP	equ $F836		; Apple Monitor ROM Clear top of GR Screen (mixed mode)
@@ -172,6 +169,8 @@ Monitor_IO 	bit A2_KBD_STRB		; clear keyboard strobe
                 sta ZP_MON_FLAGS	; initialize monitor flags on start and reset
                 sta ZP_ESCAPE_CODE	; initialize escape command
                 sta ZP_LINE_RNG		; initialize 1st paramter for hlin and vlin
+                lda #$20
+                sta A2_HGRPAGE		; set page 1 for hi-res graphics
                 
 .monitorLoop	lda A2_KBD
                 bpl .stop		; no new input, continue, don't clear strobe
@@ -344,15 +343,16 @@ ClearScreen	SUBROUTINE
                 beq .clrMixed
                 jmp A2_CLRSCR		; clear full screen lores graphics
 .clrMixed	jmp A2_CLRTOP		; clear mixed screen lores graphics
-.clrHGR         jmp A2_HGR		; clear hires screen
+.clrHGR         jmp A2_HCLEAR		; clear hires screen
 
 ;----------------------------------------------------------------------------------------
 SetGraphicsMode	SUBROUTINE
 		bit ZP_MON_FLAGS	; test bit 6: graphics or text mode
                 bvs .setGraphics
-                sta A2_TXTSET		; text mode. Set text and exit.
+                sta A2_TXTSET		; text mode. Set full screen text and exit.
                 rts
-.setGraphics	lda #$20
+.setGraphics	sta A2_TXTCLR		; graphics mode. Set and continue with other params
+		lda #$20
 		bit ZP_MON_FLAGS	; test bit 5: GR or HGR
                 bne .setHGR
                 sta A2_LORES		; set lo-res grpahics
