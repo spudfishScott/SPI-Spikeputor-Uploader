@@ -18,9 +18,11 @@ A2_CH		equ $24
 A2_CV		equ $25
 
 A2_HGR		equ $F3E2		; Applesoft HGR Command
+A2_SETHCOL	equ $F6F0		; Applesoft set HCOLOR command
 A2_CLRSCR	equ $F832		; Apple Monitor ROM Clear GR Screen
 A2_CLRTOP	equ $F836		; Apple Monitor ROM Clear top of GR Screen (mixed mode)
-A2_TABV		equ $FB5B		; Apple Monitor ROM TABV command
+A2_SETCOL	equ $F864		; Apple Monitor ROM Set color command
+A2_TABV		equ $FB5B		; Apple Monitor ROM set vertical cursor command
 A2_WAIT		equ $FCA8		; Apple Monitor ROM WAIT function
 A2_HOME		equ $FC58		; Apple Monitor ROM HOME function
 A2_COUT		equ $FDED		; Apple Monitor ROM Character Out
@@ -161,6 +163,7 @@ Monitor_IO 	bit A2_KBD_STRB		; clear keyboard strobe
 	    	lda #$00
                 sta ZP_MON_FLAGS	; initialize monitor flags on start and reset
                 sta ZP_ESCAPE_CODE	; initialize escape command
+                sta ZP_LINE_RNG		; initialize 1st paramter for hlin and vlin
                 
 .monitorLoop	lda A2_KBD
                 bpl .stop		; no new input, continue, don't clear strobe
@@ -336,6 +339,9 @@ ClearScreen	SUBROUTINE
 .clrHGR         jmp A2_HGR
 
 ;----------------------------------------------------------------------------------------
+SetGraphicsMode	SUBROUTINE
+		rts
+;----------------------------------------------------------------------------------------
 HandleSpecialChar			; exit with carry set if ZP_DATAL should be printed
 		SUBROUTINE
                 cmp #$08		; backspace - just pass it through
@@ -407,7 +413,7 @@ HandleEscape	SUBROUTINE
                 bne .handleParam	; is this the command or a parameter
                 
                 lda ZP_DATAL		; get the command
-          	ldx #$00		; check to see if it's valid
+          	ldx #$02		; check to see if it's valid
 .checkLoop      cmp .escapeCommands,x
                 beq .valid
                 dex
@@ -417,7 +423,7 @@ HandleEscape	SUBROUTINE
 .valid          sta ZP_ESCAPE_CODE	; save the escape code and wait for parameter
                 rts
                 
-.escapeCommands	hex 48 ;4c 47 50 68 70 76
+.escapeCommands	hex 48 4c 47 ;50 68 70 76
 
 .handleParam	lda ZP_ESCAPE_CODE	; get the escape command
 
@@ -437,7 +443,38 @@ HandleEscape	SUBROUTINE
                 lda ZP_DATAH
                 sta A2_CH		; set htab
 		jmp .completed
-.n1          
+
+.n1		cmp #$4c		; set graphics color
+		bne .n2
+                lda #$20
+		bit ZP_MON_FLAGS	; test bit 5: GR or HGR?
+                bne .hgr
+                lda ZP_DATAL
+                and #$0f		; only take lower nybble
+                jsr A2_SETCOL
+                jmp .completed
+.hgr            lda ZP_DATAL
+		and #$07		; only take lower 3 bits
+                tax
+                jsr A2_SETHCOL
+                jmp .completed
+   		        
+.n2		cmp #$47		; set graphics modes
+		bne .n3
+		lda ZP_MON_FLAGS
+                and #$c7		; clear bits 4, 5 and 6
+                sta ZP_MON_FLAGS
+		lda ZP_DATAH
+                and #$07		; take low three bits
+                asl			; shift into place
+                asl
+                asl
+                asl
+                ora ZP_MON_FLAGS	; set bits 4, 5 and 6
+                jsr SetGraphicsMode
+		jmp .completed
+
+.n3
 .completed	lda ZP_MON_FLAGS
                 and #$7f		; clear escape code flag
                 sta ZP_MON_FLAGS
