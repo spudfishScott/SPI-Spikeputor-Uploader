@@ -448,7 +448,7 @@ HandleEscape	SUBROUTINE
                 bne .handleParam	; is this the command or a parameter
                 
                 lda ZP_DATAL		; get the command and check it
-          	ldx #$06		; check to see if it's valid
+          	ldx #$07		; check to see if it's valid
 .checkLoop      cmp .escapeCommands,x
                 beq .valid
                 dex
@@ -458,7 +458,7 @@ HandleEscape	SUBROUTINE
 .valid          sta ZP_ESCAPE_CODE	; save the escape code and wait for parameter
                 rts
                 
-.escapeCommands	hex 48 4c 47 50 6c 70 76 68 76 
+.escapeCommands	hex 48 4c 47 50 6c 70 76 68 
 
 .handleParam	lda ZP_ESCAPE_CODE	; get the escape command
 
