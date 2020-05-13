@@ -15,7 +15,7 @@ A2_BAS		equ $28			; Apple current cursor text buffer address
 A2_HGRPAGE	equ $E6			; Apple hi byte of current HGR page buffer address
 
 A2_HCLEAR	equ $F3F2		; Applesoft HCLEAR command (clear hgr buffer)
-A2_HPLOT	equ $F411		; Applesoft HPLOT command
+A2_HPLOT	equ $F457		; Applesoft HPLOT command
 A2_HGLIN	equ $F53A		; Applesoft HGLIN command (draw a line from last plotted point)
 A2_SETHCOL	equ $F6F0		; Applesoft set HCOLOR command
 A2_PLOT		equ $F800		; Applesoft Monitor ROM Lo-res plot command
@@ -524,7 +524,8 @@ HandleEscape	SUBROUTINE
                 sta ZP_FIRSTL
                 rts			; exit without clearing any flags so next param comes in
                 
-.finishCommand	cmp #$70		; HGR Plot
+.finishCommand	lda ZP_ESCAPE_CODE
+		cmp #$70		; HGR Plot
 		bne .n5
 	        lda ZP_DATAL		; y coordinate
                 ldx ZP_FIRSTH		; x coordinate
