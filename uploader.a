@@ -527,15 +527,15 @@ HandleEscape	SUBROUTINE
 .finishCommand	cmp #$70		; HGR Plot
 		bne .n5
 	        lda ZP_DATAL		; y coordinate
-                ldx ZP_FIRSTL		; x coordinate
-                ldy ZP_FIRSTH
+                ldx ZP_FIRSTH		; x coordinate
+                ldy ZP_FIRSTL
                 jsr A2_HPLOT
                 jmp .complete2Param
                 
 .n5             cmp #$6c		; HGR Lineto
 		bne .n6
-                lda ZP_FIRSTH		; x coordinate
-                ldx ZP_FIRSTL
+                lda ZP_FIRSTL		; x coordinate
+                ldx ZP_FIRSTH
                 ldy ZP_DATAL		; y coordinatre
                 jsr A2_HGLIN
                 jmp .complete2Param
