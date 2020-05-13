@@ -175,14 +175,14 @@ Monitor_IO 	bit A2_KBD_STRB		; clear keyboard strobe
 		jsr ResetSpikeputor
 	    	lda #$00
                 sta ZP_MON_FLAGS	; initialize monitor flags on start and reset
-                jsr SetGraphicsMode	; initialize grpahics mode
-                jsr ClearScreen		; clear screen
                 sta ZP_ESCAPE_CODE	; initialize escape command
                 sta ZP_FIRSTL		; initialize 1st paramter storage
                 lda #$ff
                 sta ZP_FIRSTH		; $ff = empty
                 lda #$20
                 sta A2_HGRPAGE		; set page 1 for hi-res graphics
+                jsr SetGraphicsMode	; initialize grpahics mode
+                jsr ClearScreen		; clear screen
                 
 .monitorLoop	lda A2_KBD
                 bpl .stop		; no new input, continue, don't clear strobe
@@ -315,8 +315,8 @@ Monitor_IO 	bit A2_KBD_STRB		; clear keyboard strobe
                 
 .restart	jsr RestartSpikeputor
                 
-.wait		lda #$60
-                jsr A2_WAIT		; delay ~25 ms, enough for Spikeputor to add to buffer
+.wait		lda #$40
+                jsr A2_WAIT		; delay enough for Spikeputor to add to buffer, but too slow is bad
                 jmp .monitorLoop        ; loop
 ;----------------------------------------------------------------------------------------
 SetCursorNormal				; turn cursor blink character to normal
@@ -668,3 +668,49 @@ ResetSpikeputor
 D_SPICmd	JMP SPICmd
 D_UploadVerify	JMP UploadVerify
 D_Monitor_IO	JMP Monitor_IO
+
+		ldx #00
+                stx ZP_BUF_IDXH
+                stx ZP_BUF_IDXL
+                
+.next           ldx #>SP_OUT_BUF_IDX
+                lda #<SP_OUT_BUF_IDX
+                ldy #ZP_BUF_IDX
+                jsr WriteAddress	; write new buffer indeces   
+                
+                lda #$80
+                jsr A2_WAIT
+                
+		ldx #>SP_OUT_BUF_IDX
+                lda #<SP_OUT_BUF_IDX
+                jsr ReadAddress		; read buffer indeces
+                
+                lda ZP_DATAH
+                cmp ZP_BUF_IDXH
+                bne .err
+                lda ZP_DATAL
+                cmp ZP_BUF_IDXL
+                bne .err
+                
+.inc            inc ZP_BUF_IDXL
+                bne .next
+                inc ZP_BUF_IDXH
+                bne .next
+                rts
+                
+.err		lda ZP_DATAH
+		jsr $fdda
+                lda ZP_DATAL
+                jsr $fdda
+                lda $a0
+                jsr $fded
+                lda ZP_BUF_IDXH
+                jsr $fdda
+                lda ZP_BUF_IDXL
+                jsr $fdda
+                lda $8d
+                jsr $fded
+                jmp .inc
+
+                
+                
