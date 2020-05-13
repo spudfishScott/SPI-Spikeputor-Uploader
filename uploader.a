@@ -172,6 +172,8 @@ Monitor_IO 	bit A2_KBD_STRB		; clear keyboard strobe
 		jsr ResetSpikeputor
 	    	lda #$00
                 sta ZP_MON_FLAGS	; initialize monitor flags on start and reset
+                jsr SetGraphicsMode	; initialize grpahics mode
+                jsr ClearScreen		; clear screen
                 sta ZP_ESCAPE_CODE	; initialize escape command
                 sta ZP_FIRSTL		; initialize 1st paramter storage
                 lda #$ff
