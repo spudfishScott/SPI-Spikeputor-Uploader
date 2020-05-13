@@ -514,7 +514,7 @@ HandleEscape	SUBROUTINE
                 jsr A2_PLOT		; call Apple lo-res plot function
                 jmp .completed
   
- ; two paramter commands 
+ ; two parameter commands 
 .n4      	lda ZP_FIRSTH		; check to see if we already have the first paramter
                 cmp #$ff
                 bne .finishCommand
@@ -527,8 +527,8 @@ HandleEscape	SUBROUTINE
 .finishCommand	cmp #$70		; HGR Plot
 		bne .n5
 	        lda ZP_DATAL		; y coordinate
-                ldx ZP_FIRSTH		; x coordinate
-                ldy ZP_FIRSTL
+                ldx ZP_FIRSTL		; x coordinate
+                ldy ZP_FIRSTH
                 jsr A2_HPLOT
                 jmp .complete2Param
                 
