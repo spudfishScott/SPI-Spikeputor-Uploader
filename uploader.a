@@ -84,8 +84,8 @@ ZP_MON_FLAGS	equ $FF			; bit 7: 1 = ESC sequence being read
 SPICmd		ldx #$00
         	lda #$01		; use SPI channel 0 (set bit 0)
         	sta SPI_SS		; begin SPI transaction
-                lda #$01
-                jsr A2_WAIT		; wait for INIT puse to finish (30 uS)
+                lda #$02
+                jsr A2_WAIT		; wait for INIT puse to finish (60 uS)
 .nextByte	lda ZP_CMD_PKG,x	; load byte (one command byte, two data bytes)
                 sta SPI_DATA		; store in SPI data latch
                 sta SPI_EXEC		; execute SPI transfer
