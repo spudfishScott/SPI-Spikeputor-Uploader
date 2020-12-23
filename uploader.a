@@ -2,7 +2,7 @@
 		processor 6502
 		seg program
         
-		org $9000
+		org $8f00
         
 SPI_SS		equ $C0C1		; SPI card commands (assumes slot 4)
 SPI_EXEC	equ $C0C0
@@ -55,11 +55,22 @@ ZP_CMD_STAT	equ $EB
 ZP_DATAH	equ $EC
 ZP_DATAL	equ $ED
 
-; variables for upload_verify
+; variables for upload_verify and download
 ZP_LENH		equ $EE			; length
 ZP_LENL		equ $EF
 ZP_VERIFY	equ $FF 		; set to $80 to verify, $00 to write
 ZP_SRC_PTR	equ $F9			; pointer to source data - starts at $2004
+
+; variables for download
+ZP_STARTH	equ $F9			; start address
+ZP_STARTL	equ $FA
+
+ZP_ENDH		equ $EE
+ZP_ENDL		equ $EF
+
+ZP_OUTBUF	equ $FD
+ZP_OUTBUF_H	equ $FE
+ZP_OUTBUF_L	equ $FD
 
 ; variables for monitor_IO
 ZP_BUF_IDX	equ $EE			; buffer index 
@@ -164,7 +175,48 @@ UploadVerify	lda #$00		; initialize pointers and page end
 		sta ZP_VERIFY
                 sty ZP_LENL		; store current y reg for analysis
 .end		rts
-	
+
+;----------------------------------------------------------------------------------------
+; Download - reads Spikpeutor memory and stores it locally. 
+;	   - Set ZP_START (H/L) to start address.
+;	   - Set ZP_END (H/L) to length. Assumes Spiekputor is already stopped.
+;---------------------------------------------------------------------------------------- 
+		Subroutine
+Download	lda #$00		; initialize pointers
+		sta ZP_OUTBUF_L
+                lda #$20
+                sta ZP_OUTBUF_H		; data starts at $2000
+                
+.nextWord       ldx ZP_STARTH
+                lda ZP_STARTL
+                jsr ReadAddress
+                
+                lda ZP_DATAH
+                ldy #$00
+	 	sta (ZP_OUTBUF),Y
+		lda ZP_DATAL
+                inc ZP_OUTBUF_L		; increment buffer location
+                sta (ZP_OUTBUF),Y
+                
+                inc ZP_OUTBUF_L		; increment buffer location
+                bne .nextAddr
+                inc ZP_OUTBUF_H
+                
+.nextAddr       inc ZP_STARTL
+		inc ZP_STARTL
+		bne .checkEnd
+                inc ZP_STARTH
+		
+.checkEnd       lda ZP_STARTH
+		cmp ZP_ENDH
+		bne .nextWord
+                lda ZP_STARTL
+                cmp ZP_ENDL
+                bne .nextWord
+
+.end		rts
+
+
 ;----------------------------------------------------------------------------------------
 ; Monitor I/O - reads Spikpeutor buffer index and prints out any characters in it
 ;		will eventually handle special commands and graphics
@@ -668,6 +720,7 @@ ResetSpikeputor
 D_SPICmd	JMP SPICmd
 D_UploadVerify	JMP UploadVerify
 D_Monitor_IO	JMP Monitor_IO
+D_Download	JMP Download
 
 		ldx #00
                 stx ZP_BUF_IDXH
